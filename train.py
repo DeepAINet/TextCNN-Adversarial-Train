@@ -73,7 +73,7 @@ def train(config, model, train_iter, dev_iter, test_iter):
     flag = False          # 记录是否很久没有效果提升
     writer = SummaryWriter(log_dir=config.log_dir + '/' + config.mode)
 
-    if config.mode in['FREE', 'PGD', "FGSM"]:
+    if config.mode in['FREE', 'PGD', "FGSM", "MIX"]:
         delta = torch.zeros(config.batch_size, 32, config.embedding_dim)
         delta.requires_grad = True
 
@@ -81,15 +81,8 @@ def train(config, model, train_iter, dev_iter, test_iter):
         print('\nEpoch [{}/{}]'.format(epoch + 1, config.num_epochs))
         # scheduler.step() # 学习率衰减
         for trains, labels in train_iter:
-
-            if config.mode == 'FREE':
-                # 无任何操作的优化步骤
-                # outputs = model(trains, delta[:trains[0].size(0)])
-                # model.zero_grad()
-                # loss = F.cross_entropy(outputs, labels)
-                # loss.backward()
-                # optimizer.step()
-
+            rand = np.random.random()
+            if config.mode == 'FREE' or (config.mode == 'MIX' and rand < 0.25):
                 for _ in range(FREE_OPT_NUM):
                     outputs = model(trains, delta[:trains[0].size(0)])
                     model.zero_grad()
@@ -101,14 +94,7 @@ def train(config, model, train_iter, dev_iter, test_iter):
                     delta.data = delta + epsilon * torch.sign(grad)
                     delta.data[:trains[0].size(0)] = clamp(delta[:trains[0].size(0)], -epsilon, epsilon)
                     delta.grad.zero_()
-            elif config.mode == 'PGD':
-                # 无任何操作的优化步骤
-                # outputs = model(trains)
-                # model.zero_grad()
-                # loss = F.cross_entropy(outputs, labels)
-                # loss.backward()
-                # optimizer.step()
-
+            elif config.mode == 'PGD' or (config.mode == 'MIX' and rand < 0.5):
                 # 附加PGD操作的优化步骤
                 for _ in range(PGD_OPT_NUM):
                     outputs = model(trains, delta[:trains[0].size(0)])
@@ -122,7 +108,7 @@ def train(config, model, train_iter, dev_iter, test_iter):
                     delta.data = delta + alpha_1 * torch.sign(grad)
                     delta.data[:trains[0].size(0)] = clamp(delta[:trains[0].size(0)], -epsilon, epsilon)
                     delta.grad.zero_()
-            elif config.mode == "FGSM":
+            elif config.mode == "FGSM" or (config.mode == 'MIX' and rand < 0.75):
                 # 无任何操作的优化步骤
                 outputs = model(trains, delta[:trains[0].size(0)])
                 model.zero_grad()
@@ -234,8 +220,8 @@ def main():
     train_data = load_data('./mini-train.txt', tokenizer)
     dev_data = load_data('./mini-dev.txt', tokenizer)
     test_data = load_data('./mini-test.txt', tokenizer)
-    config = Config('./mini-train.txt', './mini-dev.txt', './mini-test.txt', "./vocab.txt", mode="FGSM")
-    assert config.mode in ["FGSM", "PLAIN", "PGD", "FREE"]
+    config = Config('./mini-train.txt', './mini-dev.txt', './mini-test.txt', "./vocab.txt", mode="MIX")
+    assert config.mode in ["FGSM", "PLAIN", "PGD", "FREE", "MIX"]
     os.makedirs(config.output_fir, exist_ok=True)
     os.makedirs(config.log_dir, exist_ok=True)
     model = Model(config)

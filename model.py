@@ -92,6 +92,7 @@ class Model(nn.Module):
         return x
 
     def forward(self, x, noise=None):
+        # print(x[1])
         out = self.embedding(x[0])
         # print(out.shape)
         if noise is not None:
